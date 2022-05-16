@@ -1,0 +1,10 @@
+*
+!/A/
+
+!*.c
+!*.h
+!*.cpp
+!*.hpp
+!CMakeLists.txt
+!*.git*
+cmake-build-debug
