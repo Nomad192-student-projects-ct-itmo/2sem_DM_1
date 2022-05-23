@@ -2,9 +2,11 @@
 #include <cstdlib>
 #include <cstdarg>
 #include <memory>
+#include <vector>
+#include <set>
 
-#define NUMBER_PROBLEM "1"
-#define N_CHAR_IN_WORD (100000)
+#define NUMBER_PROBLEM "2"
+#define N_CHAR_IN_WORD (10000)
 
 constexpr char name_input_file[] = "problem" NUMBER_PROBLEM ".in";
 constexpr char name_output_file[] = "problem" NUMBER_PROBLEM ".out";
@@ -46,35 +48,77 @@ nullptr_t error_handler(enum Errors e, int *error, ...)
     return nullptr;
 }
 
-class DFA
+class NFA
 {
 private:
     static constexpr size_t Alphabet_size = 26;
     struct State
     {
         bool isAccept = false;
-        size_t transitions[Alphabet_size]{0};
+        vector<size_t> transitions[Alphabet_size];
+
+//        State()
+//        {
+//            for(size_t i = 0; i < Alphabet_size; i++)
+//                transitions[i].push_back(0);
+//        }
     };
     State *states;
 
 public:
-    explicit DFA(size_t n) : states(new (nothrow) State[n + 1]) {}
+    explicit NFA(size_t n) : states(new (nothrow) State[n + 1]) {}
     Errors check () {return (states) ? Errors::SUCCESS : Errors::ALLOCATE;}
-    ~DFA() {delete[] states;}
+    ~NFA() {delete[] states;}
 
     void change_state(size_t st, bool isAccept) {states[st].isAccept = isAccept;}
-    void change_transition(size_t a, size_t b, char s) {states[a].transitions[s - 'a'] = b;}
+    void add_transition(size_t a, size_t b, char s) {states[a].transitions[s - 'a'].push_back(b);}
     bool check_word(const char *word)
     {
-        size_t cur_state = 1;
+        auto *cur_states = new set<size_t>{1};
+
+
         for(size_t i = 0; word[i] != '\0'; i++)
         {
-            cur_state = states[cur_state].transitions[word[i] - 'a'];
-            if(cur_state == 0) return false;
+            if(cur_states->empty()) {delete cur_states; return false;}
+            auto *new_cur_states = new set<size_t>;
+            for(size_t cur_state : *cur_states)
+            {
+                for(size_t & k : states[cur_state].transitions[word[i] - 'a'])
+                {
+                    new_cur_states->insert(k);
+                }
+            }
+            delete cur_states;
+            cur_states = new_cur_states;
         }
+        for(size_t cur_state : *cur_states)
+            if(states[cur_state].isAccept) {delete cur_states; return true;}
 
-        return states[cur_state].isAccept;
+        delete cur_states;
+        return false;
+        //return check_word_rq(0, 1, word);
     }
+
+private:
+    /*bool check_word_rq(size_t n, size_t cur_state, const char *word)
+    {
+        for(size_t i = n; word[i] != '\0'; i++)
+        {
+            if      (states[cur_state].transitions[word[i] - 'a'].empty()) return false;
+            else if (states[cur_state].transitions[word[i] - 'a'].size() == 1)
+                cur_state = (states[cur_state].transitions[word[i] - 'a'])[0];
+            else
+            {
+                for(size_t j = 0; j < states[cur_state].transitions[word[i] - 'a'].size(); j++)
+                {
+                    if(check_word_rq(i+1, (states[cur_state].transitions[word[i] - 'a'])[j], word))
+                        return true;
+                }
+                return false;
+            }
+        }
+        return states[cur_state].isAccept;
+    }//*/
 };
 
 char* scan_str(FILE *in, int *error)
@@ -116,11 +160,11 @@ char* scan_str(FILE *in, int *error)
     return new_ptr;
 }
 
-DFA* scanDFA(FILE *in, int *error)
+NFA* scanDFA(FILE *in, int *error)
 {
     size_t n, m, k;
     fscanf(in, "%zu %zu %zu", &n, &m, &k);
-    DFA *dfa = new (nothrow) DFA(n);
+    NFA *dfa = new (nothrow) NFA(n);
     if(!dfa) return error_handler(Errors::ALLOCATE, error);
     if(error_handler(dfa->check()) != (int)Errors::SUCCESS)
     {
@@ -146,7 +190,7 @@ DFA* scanDFA(FILE *in, int *error)
         size_t a, b;
         char symbol;
         fscanf(in, "%zu %zu %c\n", &a, &b, &symbol);
-        dfa->change_transition(a, b, symbol);
+        dfa->add_transition(a, b, symbol);
     }
 
     return dfa;
@@ -170,7 +214,7 @@ int main() {
     unique_ptr<char, void (*)(void *)> str(scan_str(in.get(), &result), free);
     if (!str) return result;
 
-    unique_ptr<DFA> dfa(scanDFA(in.get(), &result));
+    unique_ptr<NFA> dfa(scanDFA(in.get(), &result));
     if (!dfa)
     {
         if (result == -1)
