@@ -1,0 +1,4 @@
+[submodule "run_cmake"]
+	path = run_cmake
+	url = https://github.com/Nomad192/run_cmake.git
+	branch = only_run

@@ -10,4 +10,5 @@
 !*.hpp
 !CMakeLists.txt
 !*.git*
+!/run_cmake
 cmake-build-debug
