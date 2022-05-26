@@ -101,7 +101,7 @@ public:
         return states[cur_state].isAccept;
     }
 
-    void dfs_was_here(size_t cur, bool *was_here) const
+    bool dfs_was_here(size_t cur, bool *was_here) const
     {
         if(was_here[cur]) return;
         was_here[cur] = true;
@@ -112,16 +112,23 @@ public:
         }
     }
 
-    bool dfs_isCircle(size_t cur, bool *color, bool *useful_states) const
+    typedef char byte;
+    bool dfs_isCircle(size_t cur, byte *color, bool *useful_states) const
     {
-        if(color[cur]) {return true;}
-        color[cur] = true;
+        if(!useful_states[cur]) return false;
+        if      (color[cur] == 'g') {printf("-1 %zu\n", cur); return true;}
+        else if (color[cur] == 'b') {return false;}
+        color[cur] = 'g';
 
-        for (int i = 0; i < Alphabet_size; ++i) {
-            size_t new_cur = states[cur].transitions_next[i];
-            if(new_cur != 0 && useful_states[new_cur]) if (dfs_isCircle(new_cur, color, useful_states)) return true;
+        //for (int i = 0; i < Alphabet_size; ++i) {
+
+        for(auto new_cur : states[cur].next_map) {
+
+            //size_t new_cur = states[cur].transitions_next[i];
+            if (dfs_isCircle(new_cur.first, color, useful_states)) return true;
         }
 
+        color[cur] = 'b';
         return false;
     }
 
@@ -151,9 +158,9 @@ public:
         for(auto cur_state : AcceptStates)
             dfs_was_here(cur_state, useful_states.get());
 
-        unique_ptr<bool> color(new bool [n+1]);
+        unique_ptr<byte> color(new byte [n+1]);
         for(size_t i = 0; i < n+1; i++)
-            color.get()[i] = false;
+            color.get()[i] = 'w';
 
         if(dfs_isCircle(1, color.get(), useful_states.get())) return -1;
 
@@ -163,10 +170,12 @@ public:
             n_paths.get()[i] = -1;
 
         n_type result = states[1].isAccept;
+        //AcceptStates.
         for(auto cur_state : AcceptStates)
         {
+            if(!useful_states.get()[cur_state]) continue;
             result += paths(cur_state, n_paths.get());
-            printf("result - %" N_TYPE_SP "\n", result);
+            //printf("result - %" N_TYPE_SP "\n", result);
             result %= MOD;
         }
 
@@ -386,3 +395,28 @@ int main() {
 
     return print_answer(dfa->n_words());
 }
+
+
+/* 
+ * quick start
+cd 2sem_DM_1\C\build
+..\..\run_cmake\run
+
+ * set 
+mkdir build & cd build & cmake -G "MinGW Makefiles" ..
+
+* build and run
+cmake --build . && (echo START & C)
+echo return code: %errorlevel%
+
+* or
+..\..\run_cmake\run
+
+* move
+cd 2sem_DM_1\C\build
+cd 2sem_DM_1\C
+cd C\build
+
+* update run_cmake
+git submodule update --remote
+*/
