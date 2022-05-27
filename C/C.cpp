@@ -67,14 +67,15 @@ private:
     {
         bool isAccept = false;
         size_t transitions_next[Alphabet_size]{0};
-        unordered_map<size_t, size_t> next_map;
+        unordered_map<size_t, n_type> next_map;
         size_t transitions_prev[Alphabet_size]{0};
-        unordered_map<size_t, size_t> prev_map;
+        unordered_map<size_t, n_type> prev_map;
     };
     State *states;
     set<size_t> AcceptStates;
     size_t n;
     size_t m;
+    size_t start_state = 1;
 
 public:
     explicit DFA(size_t n, size_t m) : n(n), m(m), states(new (nothrow) State[n + 1]) {}
@@ -82,7 +83,7 @@ public:
     ~DFA() {delete[] states;}
 
     void change_state_accept(size_t st, bool isAccept) {states[st].isAccept = isAccept;}
-    void add_accept_state(size_t st) {states[st].isAccept = true; AcceptStates.insert(st);}
+    void add_accept_state(size_t st) {states[st].isAccept = true; if(st > 1) AcceptStates.insert(st);}
     void add_transition(size_t a, size_t b, char s) {
         states[a].transitions_next[s - start_symbol] = b;
         states[a].next_map[b]++;
@@ -91,7 +92,7 @@ public:
     }
     bool check_word(const char *word) const
     {
-        size_t cur_state = 1;
+        size_t cur_state = start_state;
         for(size_t i = 0; word[i] != '\0'; i++)
         {
             cur_state = states[cur_state].transitions_next[word[i] - start_symbol];
@@ -101,81 +102,121 @@ public:
         return states[cur_state].isAccept;
     }
 
-    bool dfs_was_here(size_t cur, bool *was_here) const
+
+    bool dfs_isCircle(size_t cur, char *color) const
     {
-        if(was_here[cur]) return;
-        was_here[cur] = true;
+        if(color[cur] == 'g') return true;
+        else if (color[cur] == 'u') return false;
 
-        for (int i = 0; i < Alphabet_size; ++i) {
-            size_t new_cur = states[cur].transitions_prev[i];
-            if(new_cur != 0) dfs_was_here(new_cur, was_here);
-        }
-    }
-
-    typedef char byte;
-    bool dfs_isCircle(size_t cur, byte *color, bool *useful_states) const
-    {
-        if(!useful_states[cur]) return false;
-        if      (color[cur] == 'g') {printf("-1 %zu\n", cur); return true;}
-        else if (color[cur] == 'b') {return false;}
-        color[cur] = 'g';
-
-        //for (int i = 0; i < Alphabet_size; ++i) {
+        if(cur == start_state)
+            color[cur] = 'g';
+        else
+            color[cur] = 'u';
 
         for(auto new_cur : states[cur].next_map) {
-
-            //size_t new_cur = states[cur].transitions_next[i];
-            if (dfs_isCircle(new_cur.first, color, useful_states)) return true;
+            if(dfs_isCircle(new_cur.first, color)) return true;
         }
 
-        color[cur] = 'b';
+        if(cur == start_state)
+            color[cur] = 'u';
         return false;
     }
 
-    n_type paths(size_t cur, n_type *n_paths) const
+    void reverse_dfs_isCircle(size_t cur, char *color) const
     {
-        n_type result = 0;
+        if(color[cur] == 'g') {color[cur] = 'f'; return;}
+        else if (color[cur] != 'w') {return;}    /// black or useful - achievable from the starting state
 
-        for (int i = 0; i < Alphabet_size; ++i) {
-            size_t new_cur = states[cur].transitions_prev[i];
-            if(new_cur != 0)
-            {
-                if(n_paths[new_cur] == -1) result += paths(new_cur, n_paths);
-                else result += n_paths[new_cur];
-                result %= MOD;
-            }
+        color[cur] = 'g';
+
+        bool isUseful = false;
+        bool isCircle = false;
+
+        for(auto new_cur : states[cur].prev_map) {
+            reverse_dfs_isCircle(new_cur.first, color);
+            if          (color[new_cur.first] == 'r') {isUseful = true; isCircle = true;}
+            else if     (color[new_cur.first] == 'u') {isUseful = true;}
+            else if     (color[new_cur.first] == 'f') {isCircle = true;}
+            if (color[cur] == 'f') {isCircle = true;}
         }
 
-        return result;
+        if(isUseful && isCircle)
+        {
+            color[cur] = 'r';   /// red - useful but circle
+        }
+        else if(isUseful)   // isUseful && !result
+        {
+            color[cur] = 'u';   /// useful
+        }
+        else if(isCircle)     // !isUseful && result
+        {
+            color[cur] = 'c';   /// circle without first state
+            //isCircle = false;
+        }
+        else                // (!isUseful && !result)
+        {
+            color[cur] = 'b';   /// black -  without circle and first state
+        }
+
+    }
+
+    void paths(size_t cur, n_type *n_paths, char *color) const
+    {
+        if(color[cur] != 'u') {n_paths[cur] = 0; return;}
+
+        n_type result = 0;
+
+        for(auto new_cur : states[cur].prev_map) {
+            if(n_paths[new_cur.first] == -1) {paths(new_cur.first, n_paths, color);}
+            result += (n_paths[new_cur.first] * new_cur.second)%MOD;
+            result %= MOD;
+        }
+
+        n_paths[cur] = result;
     }
 
     n_type n_words() const
     {
-        unique_ptr<bool> useful_states(new bool [n+1]);
-        for(size_t i = 0; i < n+1; i++)
-            useful_states.get()[i] = false;
-
-        for(auto cur_state : AcceptStates)
-            dfs_was_here(cur_state, useful_states.get());
-
-        unique_ptr<byte> color(new byte [n+1]);
+        unique_ptr<char> color(new char [n+1]);
         for(size_t i = 0; i < n+1; i++)
             color.get()[i] = 'w';
+        color.get()[1] = 'u';
 
-        if(dfs_isCircle(1, color.get(), useful_states.get())) return -1;
+        for(auto cur_state : AcceptStates) {
+            reverse_dfs_isCircle(cur_state, color.get());
+            if(color.get()[cur_state] == 'r') return -1;
+        }
+
+        auto it = AcceptStates.begin();
+        if(!states[1].isAccept)
+        {
+            for(; it != AcceptStates.end(); it++)
+                if(color.get()[*it] == 'u')
+                    break;
+
+            if(it == AcceptStates.end())
+                return 0;
+        }
+        {
+            unique_ptr<char> new_color(new char [n+1]);
+            for(size_t i = 0; i < n+1; i++)
+                new_color.get()[i] = 'w';
+
+            if(dfs_isCircle(1, new_color.get())) return -1;
+        }
+
 
         unique_ptr<n_type> n_paths(new n_type [n+1]);
-        n_paths.get()[1] = 1;
-        for(size_t i=2; i < n+1; i++)
+        for(size_t i=0; i < n+1; i++)
             n_paths.get()[i] = -1;
 
+        n_paths.get()[1] = 1;
         n_type result = states[1].isAccept;
-        //AcceptStates.
-        for(auto cur_state : AcceptStates)
+        for(;it != AcceptStates.end(); it++)
         {
-            if(!useful_states.get()[cur_state]) continue;
-            result += paths(cur_state, n_paths.get());
-            //printf("result - %" N_TYPE_SP "\n", result);
+            if(color.get()[*it] != 'u') continue;
+            paths(*it, n_paths.get(), color.get());
+            result += n_paths.get()[*it];
             result %= MOD;
         }
 
@@ -206,19 +247,6 @@ public:
                         {delete new_cur_states; delete cur_states; return -1;}
                     }
                 }
-//                for (int i = 0; i < Alphabet_size; ++i) {
-//                    size_t new_state = states[cur_state.first].transitions_next[i];
-//
-//                    if(new_state != 0) {
-//                        (*new_cur_states)[new_state] = ((*new_cur_states)[new_state] + cur_state.second)%MOD;
-//
-//                        if(states[new_state].isAccept)
-//                        {
-//                            if(len > min(n, m))
-//                            {delete new_cur_states; delete cur_states; return -1;}
-//                        }
-//                    }
-//                }
             }
 
             for(auto new_cur_state : *new_cur_states) {
@@ -387,8 +415,6 @@ int main() {
 
         return result;
     }
-
-
 
 //    if(dfa->n_words())
 //        return print_answer("Accepts");
